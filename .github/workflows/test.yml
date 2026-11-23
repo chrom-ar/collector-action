@@ -27,7 +27,7 @@ jobs:
       - run: shellcheck -x scripts/*.sh
       - name: actionlint
         env:
-          VERSION: 1.7.7
+          VERSION: 1.7.12
         run: |
           base="https://github.com/rhysd/actionlint/releases/download/v$VERSION"
           archive="actionlint_${VERSION}_linux_amd64.tar.gz"
