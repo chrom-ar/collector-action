@@ -1,0 +1,120 @@
+name: test
+
+# Runs the action on every runner it supports. The dry runs need no
+# Collector, so nothing here uploads anywhere.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # Weekly, against the latest CLI release.
+
+permissions:
+  contents: read
+  attestations: read # gh attestation verify
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - run: shellcheck -x scripts/*.sh
+      - name: actionlint
+        env:
+          VERSION: 1.7.7
+        run: |
+          base="https://github.com/rhysd/actionlint/releases/download/v$VERSION"
+          archive="actionlint_${VERSION}_linux_amd64.tar.gz"
+          checksums="actionlint_${VERSION}_checksums.txt"
+          curl -fsSL --retry 3 --proto '=https' -O "$base/$archive" -O "$base/$checksums"
+          grep -F "  $archive" "$checksums" | sha256sum -c -
+          tar -xzf "$archive" actionlint
+          ./actionlint -color
+
+  action:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: vite
+        name: A bundler's maps (dry run)
+        uses: ./
+        with:
+          dir: test/vite
+          release: test-${{ github.run_id }}
+          dry-run: "true"
+      - name: It says which CLI it used
+        env:
+          VERSION: ${{ steps.vite.outputs.version }}
+        run: |
+          echo "collector $VERSION"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          collector --version | grep -F "collector $VERSION"
+
+      - name: Scripts served as written (dry run)
+        uses: ./
+        with:
+          dir: test/plain/assets
+          url-prefix: /assets
+          sources: "true"
+          dry-run: "true"
+
+      - id: pinned
+        name: A pinned version, without checking provenance
+        uses: ./
+        with:
+          dir: test/vite
+          version: 0.4.0
+          verify-attestation: "false"
+          dry-run: "true"
+      - env:
+          VERSION: ${{ steps.pinned.outputs.version }}
+        run: '[ "$VERSION" = 0.4.0 ]'
+
+      - id: failing
+        name: A failed upload, best effort
+        uses: ./
+        with:
+          dir: test/vite
+          upload-token: cltu_not_a_real_token
+          dsn: http://clt_not_a_real_key@127.0.0.1:9
+          best-effort: "true"
+      - name: The job went on
+        env:
+          OUTCOME: ${{ steps.failing.outcome }}
+        run: '[ "$OUTCOME" = success ]'
+
+      - id: strict
+        name: A failed upload, not best effort
+        continue-on-error: true
+        uses: ./
+        with:
+          dir: test/vite
+          upload-token: cltu_not_a_real_token
+          dsn: http://clt_not_a_real_key@127.0.0.1:9
+      - name: That one failed
+        env:
+          OUTCOME: ${{ steps.strict.outcome }}
+        run: '[ "$OUTCOME" = failure ]'
+
+      - id: injection
+        name: Inputs are data, never code
+        continue-on-error: true
+        uses: ./
+        with:
+          dir: 'test/vite"; touch /tmp/injected; echo "'
+          release: '$(touch /tmp/injected)'
+          dry-run: "true"
+      - name: Nothing ran
+        run: '[ ! -e /tmp/injected ]'

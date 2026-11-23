@@ -1,0 +1,73 @@
+name: Collector source maps
+description: Upload a build's source maps to Collector, so stack traces show your own code.
+author: Chroma
+branding:
+  icon: upload-cloud
+  color: purple
+
+inputs:
+  dir:
+    description: The directory to upload, as built (e.g. dist, or public/assets).
+    required: true
+  release:
+    description: The release your app reports, exactly as it passes it to the SDK.
+    default: ${{ github.sha }}
+  url-prefix:
+    description: The URL path the directory is served at, e.g. /assets.
+    default: /
+  sources:
+    description: Make maps for scripts served as written, with no bundler (true or false).
+    default: "false"
+  delete:
+    description: Delete the .map files after a successful upload, so they aren't deployed (true or false).
+    default: "false"
+  dry-run:
+    description: List what would be uploaded, and send nothing (true or false).
+    default: "false"
+  upload-token:
+    description: An upload token (cltu_…), from a secret. Not needed for a dry run.
+    default: ""
+  dsn:
+    description: Your project's DSN, which says where Collector is.
+    default: ""
+  version:
+    description: The collector CLI version to use, e.g. 0.5.0, or latest.
+    default: latest
+  verify-attestation:
+    description: Check the CLI's signed build provenance with gh attestation verify (true or false). Needs permissions attestations read.
+    default: "true"
+  best-effort:
+    description: Never fail the job; a failed install or upload is a warning instead (true or false).
+    default: "false"
+
+outputs:
+  version:
+    description: The collector CLI version used.
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_VERIFY_ATTESTATION: ${{ inputs.verify-attestation }}
+        INPUT_BEST_EFFORT: ${{ inputs.best-effort }}
+        GH_TOKEN: ${{ github.token }}
+      run: '"$GITHUB_ACTION_PATH/scripts/install.sh"'
+    - id: upload
+      if: steps.install.outputs.installed == 'true'
+      shell: bash
+      env:
+        INPUT_DIR: ${{ inputs.dir }}
+        INPUT_RELEASE: ${{ inputs.release }}
+        INPUT_URL_PREFIX: ${{ inputs.url-prefix }}
+        INPUT_SOURCES: ${{ inputs.sources }}
+        INPUT_DELETE: ${{ inputs.delete }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        INPUT_BEST_EFFORT: ${{ inputs.best-effort }}
+        COLLECTOR_UPLOAD_TOKEN: ${{ inputs.upload-token }}
+        COLLECTOR_DSN: ${{ inputs.dsn }}
+        COLLECTOR_BIN: ${{ steps.install.outputs.path }}
+      run: '"$GITHUB_ACTION_PATH/scripts/upload.sh"'
