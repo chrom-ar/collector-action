@@ -33,7 +33,7 @@ uploaded yet stay minified.
 | `dir` | | Required. The directory to upload, as built |
 | `release` | `github.sha` | The release your app reports, exactly as it passes it to the SDK |
 | `url-prefix` | `/` | The URL path `dir` is served at, e.g. `/assets` |
-| `sources` | `false` | Make maps for scripts served as written, with no bundler (below) |
+| `sources` | `false` | Make maps for scripts served as written, with no bundler (below). Needs collector 0.5.0 or later |
 | `delete` | `false` | Delete the `.map` files after a successful upload, so they aren't deployed |
 | `dry-run` | `false` | List what would be uploaded, and send nothing |
 | `upload-token` | | An upload token (`cltu_…`), from a secret. Not needed for a dry run |
